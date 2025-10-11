@@ -18,6 +18,8 @@ interface HandlerArgs {
 	stashesFile?: string;
 	stashes?: (string | number)[];
 	eraDepth: number;
+	eraStop: number;
+	maxCalls: number;
 	percent?: number;
 }
 
@@ -27,6 +29,8 @@ export async function collect({
 	stashesFile,
 	stashes,
 	eraDepth,
+	eraStop,
+	maxCalls,
 }: HandlerArgs): Promise<void> {
 	DEBUG && log.debug(`suriFile: ${suriFile}`);
 	let suriData;
@@ -58,6 +62,8 @@ export async function collect({
 		suri,
 		stashes: stashesParsed,
 		eraDepth,
+		eraStop,
+		maxCalls,
 	});
 }
 
@@ -66,7 +72,8 @@ export async function ls({
 	stashesFile,
 	stashes,
 	eraDepth,
-}: Omit<HandlerArgs, 'suri'>): Promise<void> {
+	eraStop,
+}: Omit<HandlerArgs, 'suriFile' | 'maxCalls'>): Promise<void> {
 	const stashesParsed = parseStashes(stashesFile, stashes);
 	DEBUG && log.debug(`Parsed stash address: ${stashesParsed.join(', ')}`);
 
@@ -79,6 +86,7 @@ export async function ls({
 		api,
 		stashes: stashesParsed,
 		eraDepth,
+		eraStop,
 	});
 }
 
@@ -86,7 +94,7 @@ export async function lsNominators({
 	ws,
 	stashes,
 	stashesFile,
-}: Omit<HandlerArgs, 'suri' | 'eraDepth'>): Promise<void> {
+}: Omit<HandlerArgs, 'suriFile' | 'eraDepth' | 'eraStop' | 'maxCalls' | 'percent'>): Promise<void> {
 	const stashesParsed = parseStashes(stashesFile, stashes);
 	DEBUG && log.debug(`Parsed stash address: ${stashesParsed.join(', ')}`);
 

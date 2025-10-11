@@ -20,13 +20,17 @@ import BN from 'bn.js';
 import { log } from './logger';
 
 const DEBUG = process.env.PAYOUTS_DEBUG;
-const MAX_CALLS = 3;
 
 export interface ServiceArgs {
 	api: ApiPromise;
 	suri: string;
 	stashes: string[];
 	eraDepth: number;
+	eraStop: number;
+}
+
+export interface CollectServiceArgs extends ServiceArgs {
+	maxCalls: number;
 }
 
 interface NominatorInfo {
@@ -59,10 +63,13 @@ export async function collectPayouts({
 	suri,
 	stashes,
 	eraDepth,
-}: ServiceArgs): Promise<void> {
+	eraStop,
+	maxCalls,
+}: CollectServiceArgs): Promise<void> {
 	const payouts = await listPendingPayouts({
 		stashes,
 		eraDepth,
+		eraStop,
 		api,
 	});
 
@@ -75,7 +82,7 @@ export async function collectPayouts({
 		`Transactions are being created. This may take some time if there are many unclaimed eras.`
 	);
 
-	await signAndSendTxs(api, payouts, suri);
+	await signAndSendTxs(api, payouts, suri, maxCalls);
 }
 
 export async function payoutClaimedForAddressForEra(api: ApiPromise, stashAddress: string, eraIndex: number): Promise<boolean> {
@@ -92,17 +99,39 @@ export async function listPendingPayouts({
 	api,
 	stashes,
 	eraDepth,
+	eraStop,
 }: Omit<ServiceArgs, 'suri'>): Promise<
 	SubmittableExtrinsic<'promise', ISubmittableResult>[] | null
 > {
 	const activeInfoOpt = await api.query.staking.activeEra<
 		Option<ActiveEraInfo>
 	>();
+	DEBUG && log.debug(`ActiveEra response: ${JSON.stringify(activeInfoOpt.toHuman())}`);
+	DEBUG && log.debug(`ActiveEra isNone: ${activeInfoOpt.isNone}`);
+	DEBUG && log.debug(`ActiveEra isSome: ${activeInfoOpt.isSome}`);
 	if (activeInfoOpt.isNone) {
 		log.warn('ActiveEra is None, pending payouts could not be fetched.');
 		return null;
 	}
 	const currEra = activeInfoOpt.unwrap().index.toNumber();
+
+	// Validate parameters
+	if (eraDepth < 0) {
+		log.error('eraDepth must be >= 0');
+		return null;
+	}
+	if (eraStop < 0) {
+		log.error('eraStop must be >= 0');
+		return null;
+	}
+
+	// Calculate era range to process
+	const endEra = currEra - eraStop;
+	const startEra = endEra - eraDepth;
+
+	DEBUG && log.debug(`Current era: ${currEra}`);
+	DEBUG && log.debug(`Skipping ${eraStop} newest eras (stop parameter)`);
+	DEBUG && log.debug(`Checking ${eraDepth} eras from ${startEra} to ${endEra - 1}`);
 
 	// Get all the validator address to get payouts for
 	const validatorStashes = [];
@@ -137,9 +166,9 @@ export async function listPendingPayouts({
 		}
 
 		const controller = controllerOpt.unwrap();
-		// Check for unclaimed payouts from `current-eraDepth` to `current` era
-		// The current era is not claimable. Therefore we need to substract by 1.
-		for (let e = (currEra - 1) - eraDepth; e < (currEra - 1); e++) {
+		// Check for unclaimed payouts in the calculated era range
+		// Process from oldest to newest era
+		for (let e = startEra; e < endEra; e++) {
 			const payoutClaimed = await payoutClaimedForAddressForEra(api, controller.toString(), e);
 			if (payoutClaimed) {
 				continue;
@@ -174,7 +203,7 @@ export async function listPendingPayouts({
 export async function listNominators({
 	api,
 	stashes,
-}: Omit<ServiceArgs, 'suri' | 'eraDepth'>): Promise<void> {
+}: Omit<ServiceArgs, 'suri' | 'eraDepth' | 'eraStop'>): Promise<void> {
 	log.info('Querrying for nominators ...');
 	// Query for the nominators and make the data easy to use
 	const nominatorEntries = await api.query.staking.nominators.entries<
@@ -400,7 +429,8 @@ async function hasEraPoints(
 async function signAndSendTxs(
 	api: ApiPromise,
 	payouts: SubmittableExtrinsic<'promise', ISubmittableResult>[],
-	suri: string
+	suri: string,
+	maxCalls: number
 ) {
 	await cryptoWaitReady();
 	const keyring = new Keyring();
@@ -414,10 +444,10 @@ async function signAndSendTxs(
 			)}`
 		);
 
-	// Create batch calls of size `MAX_CALLS` or less
+	// Create batch calls of size `maxCalls` or less
 	const txs = payouts
 		.reduce((byMaxCalls, tx, idx) => {
-			if (idx % MAX_CALLS === 0) {
+			if (idx % maxCalls === 0) {
 				byMaxCalls.push([]);
 			}
 			byMaxCalls[byMaxCalls.length - 1].push(tx);
@@ -425,6 +455,8 @@ async function signAndSendTxs(
 			return byMaxCalls;
 		}, [] as SubmittableExtrinsic<'promise'>[][])
 		.map((payoutTxs) => api.tx.utility.batch(payoutTxs));
+
+	log.info(`Created ${txs.length} batch transactions with max ${maxCalls} calls each`);
 
 	DEBUG &&
 		log.debug(
@@ -438,8 +470,12 @@ async function signAndSendTxs(
 				.toString()}`
 		);
 
-	// Send all the transactions
+	// Send all the transactions with retry logic
 	log.info(`Getting ready to send ${txs.length} transactions.`);
+	const maxRetries = 1;
+	let successCount = 0;
+	let failCount = 0;
+
 	for (const [i, tx] of txs.entries()) {
 		log.info(
 			`Sending ${tx.method.section}.${tx.method.method} (tx ${i + 1}/${
@@ -455,12 +491,38 @@ async function signAndSendTxs(
 				} calls`
 			);
 
-		try {
-			const res = await tx.signAndSend(signingKeys, { nonce: -1 });
-			log.info(`Node response to tx: ${res.toString()}`);
-		} catch (e) {
-			log.error(`Tx failed to sign and send (tx ${i + 1}/${txs.length})`);
-			throw e;
+		// Retry loop: try once, then retry once on failure
+		for (let attempt = 0; attempt <= maxRetries; attempt++) {
+			try {
+				if (attempt > 0) {
+					log.info(`Retrying transaction (attempt ${attempt + 1}/${maxRetries + 1})...`);
+				}
+
+				const res = await tx.signAndSend(signingKeys, { nonce: -1 });
+				log.info(`Node response: ${res.toString()}`);
+				successCount++;
+				break; // Success, exit retry loop
+			} catch (e) {
+				const errorMsg = e instanceof Error ? e.message : String(e);
+
+				if (attempt < maxRetries) {
+					log.warn(`Tx failed (attempt ${attempt + 1}/${maxRetries + 1}): ${errorMsg}`);
+				} else {
+					log.error(`Tx failed after ${maxRetries + 1} attempts (tx ${i + 1}/${txs.length})`);
+					log.error(`Final error: ${errorMsg}`);
+					failCount++;
+				}
+			}
 		}
+
+		// Don't throw error - continue to next transaction
+		// This allows remaining transactions to be attempted
+	}
+
+	// Summary
+	log.info(`Transaction summary: ${successCount} succeeded, ${failCount} failed out of ${txs.length} total`);
+
+	if (failCount > 0) {
+		log.warn(`${failCount} transaction(s) failed. Check logs above for details.`);
 	}
 }

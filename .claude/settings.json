@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(**/*.env)",
+      "Read(**/*.key)",
+      "Read(**/*.kdbx)",
+      "Read(**/*.keyx)",
+      "Read(**/.ssh/**)",
+      "Read(./secrets/**)",
+      "Read(/users/test/**)",
+      "Read(/Users/test/**)",
+      "Read(./config/credentials.json)"
+    ]
+  }
+}
+

@@ -1,190 +1,538 @@
-<div align="center">
-  <h1 align="center">@zekemostov/staking-payouts</h1>
-  <h4 align="center">💸 CLI to make staking payout transactions for Substrate FRAME-based chains 💸</h4>
-  <h4 align="center">🤖 Automation friendly 🤖</h4>
-  <h4 align="center">🧱⛓💰🚀</h4>
+# Staking Payouts - Enhanced Fork
 
-  <p align="center">
-    <a href="https://www.npmjs.com/package/@zekemostov/staking-payouts"">
-      <img alt="npm" src="https://img.shields.io/npm/v/@zekemostov/staking-payouts" />
+<div align="center">
+  <h3>💸 Advanced CLI for Substrate Staking Payout Automation 💸</h3>
+  <h4>🔧 AssetHub Compatible | 🛡️ Compliance Ready | 🤖 Automation Friendly 🤖</h4>
+
+  <p>
+    <a href="https://github.com/infrachris/staking-payouts">
+      <img alt="GitHub" src="https://img.shields.io/badge/fork-enhanced-blue" />
     </a>
-    <a href="https://github.com/emostov/staking-payouts/blob/master/LICENSE">
-      <img alt="GPL-3.0-or-later" src="https://img.shields.io/npm/l/@zekemostov/staking-payouts"" />
+    <a href="https://github.com/canontech/staking-payouts">
+      <img alt="Upstream" src="https://img.shields.io/badge/upstream-canontech-green" />
+    </a>
+    <a href="LICENSE">
+      <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-orange" />
     </a>
   </p>
 </div>
 
-<br /><br />
+---
 
-### Table of contents
+## 🚀 What's New in This Fork
 
-- [About](#about)
-- [Usage notes](#usage-notes)
-- [Getting started](#getting-started)
-- [Options](#options)
-- [Docker](#docker)
+This enhanced fork adds **critical bug fixes** and **advanced features** for production validator operations:
+
+### ✅ Critical Bug Fixes
+- **Current Era Bug**: Fixed `InvalidEraToReward` errors ([PR #107](https://github.com/canontech/staking-payouts/pull/107))
+- **AssetHub Compatibility**: Works with Kusama/Polkadot AssetHub migration
+- **Era Ordering**: Processes payouts oldest→newest for compliance
+
+### 🎯 New Features
+- **`--stop` parameter**: Skip N newest eras for compliance requirements
+- **`--max-calls` parameter**: Control batch size for different RPC providers
+- **Retry Logic**: Auto-retry failed transactions once
+- **Enhanced Logging**: Debug mode with detailed era calculations
+- **Transaction Summaries**: Know exactly what succeeded/failed
+
+### 📊 Use Cases
+- ✅ Kusama Decentralized Nodes Program (72-hour compliance)
+- ✅ Multi-validator operations with batch optimization
+- ✅ AssetHub transaction size constraints
+- ✅ Automated payout collection with error recovery
+
+---
+
+## 📖 Table of Contents
+
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Basic Examples](#basic-examples)
+  - [Advanced Features](#advanced-features)
+  - [72-Hour Compliance](#72-hour-compliance)
+- [Parameters](#parameters)
+- [Chain-Specific Settings](#chain-specific-settings)
+- [RPC Endpoints](#rpc-endpoints)
 - [Debugging](#debugging)
-- [Questions, feature request, or bug reports](#questions-feature-request-or-bug-reports)
-- [Substrate chain assumptions](#substrate-chain-assumptions)
-- [Support this project](#support-this-project)
+- [Automation](#automation)
+- [Testing](#testing)
+- [Contributing](#contributing)
 
-### About
+---
 
-This simple tool enables you to create a batch of payout transactions for a given list of validators and/or nominators - automating the process of gathering unclaimed rewards.
+## ⚡ Quick Start
 
-For each validator it finds the last era where they collected payouts and then creates payout transactions for the eras that have ocurred since and for which they where in the validator set. If you think there are un-paid out eras prior to the last payed out, you can also specify a `eraDepth`; the tool will check `lastPayedOutEra` through `lastPayedOutEra - eraDepth` to see if there are any eras where they where in the validator set and payouts have not been collected.
-
-#### Motivation
-
-Have a large list of validators and/or nominators you want to get payouts for?
-> Put their addresses in a JSON file once and simply run this program each time you want to collect.
-
-Want to automate the payout gather process?
-> Using something like systemd.timers or cron, run this program at regular intervals. Plus, its already docker ready!
-
-### Usage Notes
-
-#### Perquisites
-
-- node.js > 14
-
-#### Updating
-
-Substrate chains use a non self describing codec, meaning clients that communicate with the chain need type definitions to decode the data. Some runtime upgrades require new type definitions which may affect this CLI.
-
-Thus, it is recommended to upgrade this CLI to the latest version prior to runtime upgrade in order to ensure it will always have the latest type definitions from polkadot-js/api.
-
-## Getting started
-
-### Install
+### Installation
 
 ```bash
-# NPM
-npm install -G @zekemostov/staking-payouts
-
-# Github
-git clone https://github.com/emostov/staking-payouts.git
+# Clone the enhanced fork
+git clone https://github.com/infrachris/staking-payouts.git
 cd staking-payouts
-# Note depending on the version of Node being used, corepack might need to be enabled which will be prompted in the terminal.
+
+# Install dependencies
 yarn install
-yarn run build
+
+# Build
+yarn build
 ```
 
-### Collect unclaimed payouts
+### Basic Usage
 
+**List unclaimed payouts** (read-only, safe):
 ```bash
-# NPM
-payouts collect \
-  -w wss://kusama.api.onfinality.io/public \
-  -s 15Jbynf3EcRqdHV1K14LXYh7PQFTbp5wiXfrc4kbMReR9KxA \
-  -u ./key.example.txt \
-  -e 8
+node build/index.js ls \
+  -e 25 \
+  --stop 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json
+```
 
-# Github
+**Collect payouts**:
+```bash
 node build/index.js collect \
-  -w wss://kusama.api.onfinality.io/public \
-  -s 15Jbynf3EcRqdHV1K14LXYh7PQFTbp5wiXfrc4kbMReR9KxA \
-  -u ./key.example.txt \
-  -e 8
+  -e 20 \
+  --stop 1 \
+  --max-calls 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json \
+  --suriFile ./key.txt
 ```
 
-**NOTE:** you can also specify a json file with an array of validator stash addresses:
+---
+
+## 📥 Installation
+
+### Prerequisites
+- Node.js >= 14
+- Yarn (v4.5.3 recommended)
+
+### From Source
 
 ```bash
-payouts collect \
-  -w wss://kusama.api.onfinality.io/public \
-  --stashesFile ./stashes.example.json \
-  --suriFile ./key.example.txt
+git clone https://github.com/infrachris/staking-payouts.git
+cd staking-payouts
+yarn install
+yarn build
 ```
 
-### List unclaimed payouts
+### Configuration Files
+
+Create your stashes file (`stashes.json`):
+```json
+[
+  "ValidatorStashAddress1...",
+  "ValidatorStashAddress2..."
+]
+```
+
+Create your key file (`key.txt`):
+```
+your-seed-phrase-or-private-key-here
+```
+
+**⚠️ IMPORTANT**: Never commit `key.txt` or any file containing private keys!
+
+---
+
+## 🎮 Usage
+
+### Basic Examples
+
+#### List Unclaimed Payouts
 
 ```bash
-payouts ls \
-  -w wss://kusama.api.onfinality.io/public \
-  --stashesFile ./stashes.example.json \
-  -e 8
+# Check last 25 eras (skipping current)
+node build/index.js ls \
+  -e 25 \
+  --stop 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json
 ```
 
-### List nominators of the given stash addresses in order of bonded funds
+#### Collect Payouts
 
 ```bash
-payouts lsNominators \
-  -w wss://rpc.polkadot.io \
-  -s 111B8CxcmnWbuDLyGvgUmRezDCK1brRZmvUuQ6SrFdMyc3S \
+# Collect with conservative batch size
+node build/index.js collect \
+  -e 20 \
+  --stop 1 \
+  --max-calls 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json \
+  --suriFile ./key.txt
 ```
 
-### List count of validator's commission under and above the given value
+### Advanced Features
+
+#### Era Control with `--stop`
+
+Skip N newest eras (useful for compliance buffers):
 
 ```bash
-payouts commission \
-        -w wss://rpc.polkadot.io \
-        -p 0.9
+# Skip current era only (default)
+--stop 1
+
+# Skip 5 newest eras (30-hour buffer on Kusama)
+--stop 5
+
+# Skip 2 eras (12-hour buffer on Kusama)
+--stop 2
 ```
 
-## Options
-
-```log
-Commands:
-  index.ts collect       Collect pending payouts                       [default]
-  index.ts ls            List pending payouts
-  index.ts lsNominators  List nominators backing the given stashes
-  index.ts commission    List validators with commission under and above the
-                         given value
-
-Options:
-      --help         Show help                                         [boolean]
-      --version      Show version number                               [boolean]
-  -w, --ws           The API endpoint to connect to, e.g.
-                     wss://kusama-rpc.polkadot.io            [string] [required]
-  -S, --stashesFile  Path to .json file containing an array of the stash
-                     addresses to call payouts for.                     [string]
-  -s, --stashes      Array of stash addresses to call payouts for. Required if
-                     not using stashesFile.                              [array]
-  -e, --eraDepth     How many eras prior to the last collected era to check for
-                     uncollected payouts.                  [number] [default: 0]
-  -u, --suriFile                                             [string] [required]
+**Example**:
+```bash
+node build/index.js ls -e 25 --stop 5 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json
 ```
 
-**NOTES:**
+#### Batch Size Optimization with `--max-calls`
 
-  - `collect` is the default command and as such can be omitted.
-  - `--suriFile` is only require for the `collect` command.
-  - `lsNominators` only requires a stash address and api endpoint.
-
-## Docker
-
-### Build
+Control how many `payoutStakers` calls per transaction:
 
 ```bash
-docker build -t payouts .
+# Conservative (1 call per tx) - safest for AssetHub
+--max-calls 1
+
+# Moderate (2 calls per tx)
+--max-calls 2
+
+# Default (3 calls per tx)
+--max-calls 3
 ```
 
-### Run
+**Example**:
+```bash
+node build/index.js collect \
+  -e 10 \
+  --stop 1 \
+  --max-calls 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json \
+  --suriFile ./key.txt
+```
+
+### 72-Hour Compliance
+
+For programs requiring payouts within 72 hours (e.g., Kusama Decentralized Nodes):
 
 ```bash
-docker run payouts collect \
-  -w wss://kusama.api.onfinality.io/public \
-  -s GCporqtiw7ybKYUqAftjvUAjZnp3x9gfrWsTy1GrvrGwmYT \
-  -u ./key.example.txt
+node build/index.js collect \
+  -e 15 \
+  --stop 1 \
+  --max-calls 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json \
+  --suriFile ./key.txt
 ```
 
-## Debugging
+**Rationale**:
+- `-e 15`: Check 15 eras back = 90 hours on Kusama (6hr/era)
+- `--stop 1`: Skip current era (not claimable yet)
+- Provides 18-hour safety margin beyond 72-hour requirement
 
-In order to get debug log messages you can set `PAYOUTS_DEBUG=1`.
+---
 
-## Questions, feature request, or bug reports
+## 🔧 Parameters
 
-If you have a question, feature request or believe you found a bug please open up a issue in the github repo. All feedback is appreciated.
+### Global Options
 
-## Substrate chain assumptions
+| Parameter | Alias | Description | Default |
+|-----------|-------|-------------|---------|
+| `--ws` | `-w` | WebSocket RPC endpoint | Required |
+| `--stashesFile` | `-S` | Path to JSON file with stash addresses | Optional* |
+| `--stashes` | `-s` | Array of stash addresses | Optional* |
+| `--eraDepth` | `-e` | How many eras to check | `0` |
+| `--eraStop` | `--stop` | Skip N newest eras | `1` |
+| `--maxCalls` | `-m` | Max calls per batch transaction | `3` |
 
-The chain must be `FRAME`-based and use the substrate staking pallet.
+*Either `--stashesFile` or `--stashes` is required
 
-## Support this project
+### Command-Specific Options
 
-- 👩‍💻 Contribute to the docs or code
-- ⭐️ Star the github repo
-- 🗳 Nominate (or tip) me!
-  - **polkadot**: 13zBFyK97dg4hWjXwEpigeVdu69sHa4fc8JYegpB369PAafq
-  - **kusama**: GCporqtiw7ybKYUqAftjvUAjZnp3x9gfrWsTy1GrvrGwmYT
+**For `collect` command**:
+| Parameter | Alias | Description | Default |
+|-----------|-------|-------------|---------|
+| `--suriFile` | `-u` | Path to file with private key | Required |
+
+### Commands
+
+```bash
+node build/index.js <command> [options]
+```
+
+| Command | Description |
+|---------|-------------|
+| `collect` | Collect pending payouts (default) |
+| `ls` | List pending payouts (read-only) |
+| `lsNominators` | List nominators backing given stashes |
+| `commission` | List validators by commission % |
+
+---
+
+## ⛓️ Chain-Specific Settings
+
+### Kusama (AssetHub Required)
+
+**Chain Info**:
+- Era Duration: ~6 hours
+- Payout Window: 84 eras (~21 days)
+- **IMPORTANT**: Must use AssetHub endpoint (relay chain no longer supports staking ops)
+
+**Recommended Settings**:
+```bash
+-e 15-25          # Era depth
+--stop 1-2        # Skip newest eras
+--max-calls 1     # Conservative for AssetHub
+```
+
+**Example**:
+```bash
+node build/index.js collect \
+  -e 20 \
+  --stop 1 \
+  --max-calls 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./kusama-stashes.json \
+  --suriFile ./kusama-key.txt
+```
+
+### Polkadot
+
+**Chain Info**:
+- Era Duration: ~24 hours
+- Payout Window: 84 eras (~84 days)
+
+**Recommended Settings**:
+```bash
+-e 7-14           # Era depth
+--stop 1          # Skip current era
+--max-calls 3-5   # More permissive than AssetHub
+```
+
+**Example**:
+```bash
+node build/index.js collect \
+  -e 10 \
+  --stop 1 \
+  --max-calls 3 \
+  -w wss://rpc.ibp.network:443/polkadot \
+  --stashesFile ./polkadot-stashes.json \
+  --suriFile ./polkadot-key.txt
+```
+
+---
+
+## 🌐 RPC Endpoints
+
+### Kusama AssetHub
+
+**Primary (Recommended)**:
+```
+wss://sys.ibp.network:443/asset-hub-kusama
+```
+
+**Fallback**:
+```
+wss://kusama-asset-hub-rpc.polkadot.io/public
+```
+
+**⚠️ Note**: Old relay chain endpoints (`wss://kusama.api.onfinality.io`) no longer support staking operations after AssetHub migration.
+
+### Polkadot
+
+**Primary**:
+```
+wss://rpc.ibp.network:443/polkadot
+```
+
+**Fallback**:
+```
+wss://rpc.polkadot.io
+```
+
+---
+
+## 🐛 Debugging
+
+### Enable Debug Mode
+
+```bash
+export PAYOUTS_DEBUG=1
+node build/index.js ls -e 10 --stop 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json
+```
+
+### Debug Output Includes
+
+- Current era number
+- Era range being processed (start→end)
+- Validator vs nominator detection
+- Stash address parsing
+- Batch transaction details
+- Retry attempts and results
+
+**Example Output**:
+```
+[payouts] debug: Current era: 8675
+[payouts] debug: Skipping 1 newest eras (stop parameter)
+[payouts] debug: Checking 25 eras from 8649 to 8673
+[payouts] debug: Validator address detected: Ed1x...Cb6
+[payouts] info: Created 3 batch transactions with max 3 calls each
+```
+
+---
+
+## 🤖 Automation
+
+### Cron (Every 12 Hours)
+
+```bash
+# Add to crontab: crontab -e
+0 */12 * * * cd ~/staking-payouts && node build/index.js collect -e 15 --stop 1 --max-calls 1 -w wss://sys.ibp.network:443/asset-hub-kusama --stashesFile ./stashes.json --suriFile ./key.txt >> ~/payout.log 2>&1
+```
+
+### Systemd Timer
+
+**Service file** (`/etc/systemd/system/kusama-payouts.service`):
+```ini
+[Unit]
+Description=Kusama Staking Payouts
+After=network.target
+
+[Service]
+Type=oneshot
+User=your-user
+WorkingDirectory=/home/your-user/staking-payouts
+Environment="PAYOUTS_DEBUG=1"
+ExecStart=/usr/bin/node build/index.js collect -e 15 --stop 1 --max-calls 1 -w wss://sys.ibp.network:443/asset-hub-kusama --stashesFile ./stashes.json --suriFile ./key.txt
+```
+
+**Timer file** (`/etc/systemd/system/kusama-payouts.timer`):
+```ini
+[Unit]
+Description=Run Kusama payouts every 12 hours
+
+[Timer]
+OnCalendar=*-*-* 00,12:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+**Enable**:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now kusama-payouts.timer
+sudo systemctl status kusama-payouts.timer
+```
+
+---
+
+## 🧪 Testing
+
+### Read-Only Tests (Safe)
+
+```bash
+# List unclaimed payouts (no transactions sent)
+export PAYOUTS_DEBUG=1
+node build/index.js ls \
+  -e 25 \
+  --stop 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json
+```
+
+### Batch Size Testing
+
+See `BATCH_SIZE_TESTING.md` for detailed testing protocol.
+
+**Quick test with small batch**:
+```bash
+node build/index.js collect \
+  -e 5 \
+  --stop 2 \
+  --max-calls 1 \
+  -w wss://sys.ibp.network:443/asset-hub-kusama \
+  --stashesFile ./stashes.json \
+  --suriFile ./key.txt
+```
+
+---
+
+## 🔒 Security
+
+### Best Practices
+
+- ✅ **Never commit private keys** to version control
+- ✅ **Use read-only mode** (`ls` command) for testing
+- ✅ **Test with small amounts** first
+- ✅ **Keep backups** of your key files
+- ✅ **Use hardware wallets** when possible
+- ✅ **Monitor logs** for suspicious activity
+
+### Files to Never Commit
+
+The `.gitignore` is configured to exclude:
+- `*.key` (private keys)
+- `/test/` directory
+- `/build/` directory
+- `*.txt` containing seeds
+
+---
+
+## 🤝 Contributing
+
+### Upstream Contributions
+
+This fork maintains compatibility with the upstream project. Bug fixes may be contributed back via pull requests.
+
+**Upstream Repository**: https://github.com/canontech/staking-payouts
+**Submitted PR**: #107 (critical current era bug fix)
+
+### Fork-Specific Features
+
+For issues or features specific to this enhanced fork:
+- **GitHub Issues**: https://github.com/infrachris/staking-payouts/issues
+- **Pull Requests**: Welcome for improvements
+
+---
+
+## 📜 License
+
+Apache-2.0 (same as upstream)
+
+---
+
+## 🙏 Credits
+
+**Original Project**: [@zekemostov](https://github.com/emostov) / [canontech](https://github.com/canontech)
+**Enhanced Fork**: [@infrachris](https://github.com/infrachris)
+
+Special thanks to the original authors for creating this essential tool for the Polkadot ecosystem.
+
+---
+
+## 📞 Support
+
+**For this enhanced fork**:
+- GitHub Issues: https://github.com/infrachris/staking-payouts/issues
+
+**For general staking-payouts questions**:
+- Original Repo: https://github.com/canontech/staking-payouts
+
+**For Substrate/Polkadot questions**:
+- Polkadot Forum: https://forum.polkadot.network/
+- Substrate Stack Exchange: https://substrate.stackexchange.com/
+
+---
+
+<div align="center">
+  <p>
+    <strong>Built for validators, by validators</strong><br>
+    Making Substrate staking rewards accessible and automated
+  </p>
+</div>

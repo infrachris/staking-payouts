@@ -37,10 +37,28 @@ async function main() {
 			eraDepth: {
 				alias: 'e',
 				description:
-					'How many eras prior to the last collected era to check for uncollected payouts.',
+					'How many eras to check for uncollected payouts.',
 				number: true,
 				demandOption: false,
 				default: 0,
+				global: true,
+			},
+			eraStop: {
+				alias: 'stop',
+				description:
+					'Skip the N newest eras (default: 1 to skip current era only).',
+				number: true,
+				demandOption: false,
+				default: 1,
+				global: true,
+			},
+			maxCalls: {
+				alias: 'm',
+				description:
+					'Maximum payoutStakers calls per batch transaction (default: 3).',
+				number: true,
+				demandOption: false,
+				default: 3,
 				global: true,
 			},
 		})

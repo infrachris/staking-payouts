@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(payouts ls:*)",
+      "Bash(payouts collect:*)",
+      "WebFetch(domain:kusama.subscan.io)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Read(//opt/homebrew/lib/node_modules/@zekemostov/staking-payouts/build/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

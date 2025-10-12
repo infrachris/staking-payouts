@@ -470,6 +470,12 @@ async function signAndSendTxs(
 				.toString()}`
 		);
 
+	// Query the current nonce once, then manually increment for each transaction
+	// This prevents nonce collisions when sending multiple transactions sequentially
+	let currentNonce = (await api.rpc.system.accountNextIndex(signingKeys.address)).toNumber();
+
+	DEBUG && log.debug(`Starting nonce: ${currentNonce}`);
+
 	// Send all the transactions with retry logic
 	log.info(`Getting ready to send ${txs.length} transactions.`);
 	const maxRetries = 1;
@@ -498,7 +504,9 @@ async function signAndSendTxs(
 					log.info(`Retrying transaction (attempt ${attempt + 1}/${maxRetries + 1})...`);
 				}
 
-				const res = await tx.signAndSend(signingKeys, { nonce: -1 });
+				// Use explicit nonce to prevent nonce collisions
+				DEBUG && log.debug(`Using nonce ${currentNonce} for tx ${i + 1}/${txs.length}`);
+				const res = await tx.signAndSend(signingKeys, { nonce: currentNonce });
 				log.info(`Node response: ${res.toString()}`);
 				successCount++;
 				break; // Success, exit retry loop
@@ -514,6 +522,10 @@ async function signAndSendTxs(
 				}
 			}
 		}
+
+		// Increment nonce for next transaction (whether this one succeeded or failed)
+		// Even failed transactions consume the nonce, so we must increment
+		currentNonce++;
 
 		// Don't throw error - continue to next transaction
 		// This allows remaining transactions to be attempted
